@@ -532,33 +532,34 @@
       outline: none;
     }
 
-    .viewer__mobileNote {
+    .viewer__pages {
       display: none;
-      min-height: 100%;
-      padding: 28px;
-      place-items: center;
-      text-align: center;
+      height: 100%;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      padding: 18px 12px 32px;
       background:
-        radial-gradient(circle at 50% 0%, rgba(239,51,64,0.18), transparent 24rem),
+        radial-gradient(circle at 50% 0%, rgba(239,51,64,0.14), transparent 22rem),
         #101116;
     }
 
-    .viewer__mobileNoteInner {
+    .viewer__status {
+      margin: 34px auto;
       max-width: 420px;
       color: rgba(246, 242, 234, 0.72);
       font-size: 0.98rem;
       line-height: 1.7;
+      text-align: center;
     }
 
-    .viewer__mobileNoteInner strong {
+    .viewer__pageCanvas {
       display: block;
-      margin-bottom: 10px;
-      color: var(--text);
-      font-family: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
-      font-size: 2rem;
-      font-weight: 400;
-      letter-spacing: -0.05em;
-      line-height: 1;
+      width: 100%;
+      height: auto;
+      margin: 0 auto 16px;
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 18px 48px rgba(0, 0, 0, 0.32);
     }
 
     .viewer__frame {
@@ -594,9 +595,9 @@
       .viewer__title { font-size: 0.98rem; }
       .viewer__bar { align-items: flex-start; }
       .viewer__actions { flex-direction: column; align-items: stretch; gap: 8px; }
-      .viewer__action,
+      .viewer__action { display: none; }
       .viewer__close { width: 100%; min-width: 132px; }
-      .viewer__mobileNote { display: grid; }
+      .viewer__pages { display: block; }
       .viewer__frame { display: none; }
     }
 
@@ -716,43 +717,104 @@
           <button class="viewer__close" id="viewerClose" type="button" onclick="closeViewer()">Close</button>
         </div>
       </div>
-      <div class="viewer__mobileNote" aria-hidden="true">
-        <div class="viewer__mobileNoteInner">
-          <strong>Ready to view this brochure.</strong>
-          Tap <b>Open PDF</b> to view all pages in your phone’s PDF viewer, or tap <b>Back to gallery</b> to return to the showcase.
-        </div>
+      <div class="viewer__pages" id="viewerPages" aria-live="polite">
+        <div class="viewer__status" id="viewerStatus">Loading brochure pages…</div>
       </div>
       <iframe class="viewer__frame" id="viewerFrame" title="PDF preview"></iframe>
     </div>
   </div>
 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" referrerpolicy="no-referrer"></script>
   <script>
+    if (window.pdfjsLib) {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    }
+
     const viewer = document.getElementById('viewer');
     const frame = document.getElementById('viewerFrame');
     const title = document.getElementById('viewerTitle');
     const openLink = document.getElementById('viewerOpen');
     const closeButton = document.getElementById('viewerClose');
+    const pagesContainer = document.getElementById('viewerPages');
+    const statusMessage = document.getElementById('viewerStatus');
     let lastFocused = null;
+    let renderToken = 0;
 
     function isMobilePdfExperience() {
       return window.matchMedia('(max-width: 700px)').matches || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    }
+
+    function clearMobilePages(message = 'Loading brochure pages…') {
+      pagesContainer.innerHTML = '';
+      statusMessage.textContent = message;
+      pagesContainer.appendChild(statusMessage);
+    }
+
+    async function renderMobilePdf(pdf) {
+      const token = ++renderToken;
+      clearMobilePages('Loading brochure pages…');
+
+      if (!window.pdfjsLib) {
+        clearMobilePages('The brochure viewer could not load. Please refresh this page and try again.');
+        return;
+      }
+
+      try {
+        const pdfDocument = await pdfjsLib.getDocument(pdf).promise;
+        if (token !== renderToken) return;
+        pagesContainer.innerHTML = '';
+
+        for (let pageNumber = 1; pageNumber <= pdfDocument.numPages; pageNumber += 1) {
+          if (token !== renderToken) return;
+          const page = await pdfDocument.getPage(pageNumber);
+          const baseViewport = page.getViewport({ scale: 1 });
+          const availableWidth = Math.min(pagesContainer.clientWidth - 24, 900);
+          const scale = Math.max(0.8, availableWidth / baseViewport.width);
+          const viewport = page.getViewport({ scale });
+          const canvas = document.createElement('canvas');
+          const context = canvas.getContext('2d');
+          const outputScale = Math.min(window.devicePixelRatio || 1, 2);
+
+          canvas.className = 'viewer__pageCanvas';
+          canvas.width = Math.floor(viewport.width * outputScale);
+          canvas.height = Math.floor(viewport.height * outputScale);
+          canvas.style.width = `${Math.floor(viewport.width)}px`;
+          canvas.style.maxWidth = '100%';
+          canvas.setAttribute('aria-label', `Page ${pageNumber} of ${pdfDocument.numPages}`);
+
+          context.setTransform(outputScale, 0, 0, outputScale, 0, 0);
+          pagesContainer.appendChild(canvas);
+          await page.render({ canvasContext: context, viewport }).promise;
+        }
+      } catch (error) {
+        if (token !== renderToken) return;
+        clearMobilePages('Sorry, this brochure could not load here. Please refresh the page and try again.');
+      }
     }
 
     function openViewer(pdf, pdfTitle) {
       const mobile = isMobilePdfExperience();
       lastFocused = document.activeElement;
       title.textContent = pdfTitle;
-      frame.src = mobile ? 'about:blank' : pdf;
       openLink.href = pdf;
       closeButton.textContent = mobile ? 'Back to gallery' : 'Close';
       viewer.classList.add('is-open');
       document.body.style.overflow = 'hidden';
       closeButton.focus({ preventScroll: true });
+
+      if (mobile) {
+        frame.src = 'about:blank';
+        renderMobilePdf(pdf);
+      } else {
+        frame.src = pdf;
+      }
     }
 
     function closeViewer() {
+      renderToken += 1;
       viewer.classList.remove('is-open');
       frame.src = 'about:blank';
+      clearMobilePages();
       document.body.style.overflow = '';
       closeButton.textContent = 'Close';
       if (lastFocused && typeof lastFocused.focus === 'function') {
