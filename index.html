@@ -532,6 +532,35 @@
       outline: none;
     }
 
+    .viewer__mobileNote {
+      display: none;
+      min-height: 100%;
+      padding: 28px;
+      place-items: center;
+      text-align: center;
+      background:
+        radial-gradient(circle at 50% 0%, rgba(239,51,64,0.18), transparent 24rem),
+        #101116;
+    }
+
+    .viewer__mobileNoteInner {
+      max-width: 420px;
+      color: rgba(246, 242, 234, 0.72);
+      font-size: 0.98rem;
+      line-height: 1.7;
+    }
+
+    .viewer__mobileNoteInner strong {
+      display: block;
+      margin-bottom: 10px;
+      color: var(--text);
+      font-family: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+      font-size: 2rem;
+      font-weight: 400;
+      letter-spacing: -0.05em;
+      line-height: 1;
+    }
+
     .viewer__frame {
       width: 100%;
       height: 100%;
@@ -563,7 +592,12 @@
       .viewer__shell { width: 100%; height: 100%; border-radius: 0; border: 0; }
       .viewer__bar { padding: 12px; }
       .viewer__title { font-size: 0.98rem; }
-      .viewer__action { display: inline-flex; }
+      .viewer__bar { align-items: flex-start; }
+      .viewer__actions { flex-direction: column; align-items: stretch; gap: 8px; }
+      .viewer__action,
+      .viewer__close { width: 100%; min-width: 132px; }
+      .viewer__mobileNote { display: grid; }
+      .viewer__frame { display: none; }
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -679,7 +713,13 @@
         <div class="viewer__title" id="viewerTitle">PDF Preview</div>
         <div class="viewer__actions">
           <a class="viewer__action" id="viewerOpen" href="#" target="_blank" rel="noopener">Open PDF</a>
-          <button class="viewer__close" type="button" onclick="closeViewer()">Close</button>
+          <button class="viewer__close" id="viewerClose" type="button" onclick="closeViewer()">Close</button>
+        </div>
+      </div>
+      <div class="viewer__mobileNote" aria-hidden="true">
+        <div class="viewer__mobileNoteInner">
+          <strong>Ready to view this brochure.</strong>
+          Tap <b>Open PDF</b> to view all pages in your phone’s PDF viewer, or tap <b>Back to gallery</b> to return to the showcase.
         </div>
       </div>
       <iframe class="viewer__frame" id="viewerFrame" title="PDF preview"></iframe>
@@ -691,30 +731,30 @@
     const frame = document.getElementById('viewerFrame');
     const title = document.getElementById('viewerTitle');
     const openLink = document.getElementById('viewerOpen');
+    const closeButton = document.getElementById('viewerClose');
     let lastFocused = null;
 
+    function isMobilePdfExperience() {
+      return window.matchMedia('(max-width: 700px)').matches || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    }
+
     function openViewer(pdf, pdfTitle) {
-      const isMobileViewer = window.matchMedia('(max-width: 700px)').matches || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-
-      if (isMobileViewer) {
-        const opened = window.open(pdf, '_blank', 'noopener');
-        if (!opened) window.location.href = pdf;
-        return;
-      }
-
+      const mobile = isMobilePdfExperience();
       lastFocused = document.activeElement;
       title.textContent = pdfTitle;
-      frame.src = pdf;
+      frame.src = mobile ? 'about:blank' : pdf;
       openLink.href = pdf;
+      closeButton.textContent = mobile ? 'Back to gallery' : 'Close';
       viewer.classList.add('is-open');
       document.body.style.overflow = 'hidden';
-      document.querySelector('.viewer__close').focus({ preventScroll: true });
+      closeButton.focus({ preventScroll: true });
     }
 
     function closeViewer() {
       viewer.classList.remove('is-open');
       frame.src = 'about:blank';
       document.body.style.overflow = '';
+      closeButton.textContent = 'Close';
       if (lastFocused && typeof lastFocused.focus === 'function') {
         lastFocused.focus({ preventScroll: true });
       }
