@@ -533,11 +533,11 @@
     }
 
     .viewer__pages {
-      display: none;
+      display: block;
       height: 100%;
       overflow-y: auto;
       -webkit-overflow-scrolling: touch;
-      padding: 18px 12px 32px;
+      padding: 18px 12px 42px;
       background:
         radial-gradient(circle at 50% 0%, rgba(239,51,64,0.14), transparent 22rem),
         #101116;
@@ -563,6 +563,7 @@
     }
 
     .viewer__frame {
+      display: none;
       width: 100%;
       height: 100%;
       border: 0;
@@ -740,17 +741,13 @@
     let lastFocused = null;
     let renderToken = 0;
 
-    function isMobilePdfExperience() {
-      return window.matchMedia('(max-width: 700px)').matches || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-    }
-
     function clearMobilePages(message = 'Loading brochure pages…') {
       pagesContainer.innerHTML = '';
       statusMessage.textContent = message;
       pagesContainer.appendChild(statusMessage);
     }
 
-    async function renderMobilePdf(pdf) {
+    async function renderPdfPages(pdf) {
       const token = ++renderToken;
       clearMobilePages('Loading brochure pages…');
 
@@ -793,21 +790,15 @@
     }
 
     function openViewer(pdf, pdfTitle) {
-      const mobile = isMobilePdfExperience();
       lastFocused = document.activeElement;
       title.textContent = pdfTitle;
       openLink.href = pdf;
-      closeButton.textContent = mobile ? 'Back to gallery' : 'Close';
+      closeButton.textContent = 'Back to gallery';
+      frame.src = 'about:blank';
       viewer.classList.add('is-open');
       document.body.style.overflow = 'hidden';
       closeButton.focus({ preventScroll: true });
-
-      if (mobile) {
-        frame.src = 'about:blank';
-        renderMobilePdf(pdf);
-      } else {
-        frame.src = pdf;
-      }
+      renderPdfPages(pdf);
     }
 
     function closeViewer() {
